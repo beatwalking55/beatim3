@@ -1,4 +1,5 @@
-import 'dart:developer';
+import 'dart:developer' as dev;
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'video_list.dart';
+import 'musicdata.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,7 @@ class YoutubePlayerDemoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Youtube Player Flutter',
+      title: 'Beatim',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         appBarTheme: const AppBarTheme(
@@ -57,20 +59,11 @@ class _MyHomePageState extends State<MyHomePage> {
   late PlayerState _playerState;
   late YoutubeMetaData _videoMetaData;
   double _volume = 100;
+  double _playbackBPM = 160.0;
   bool _muted = false;
   bool _isPlayerReady = false;
 
-  final List<String> _ids = [
-    'nPt8bK2gbaU',
-    'gQDByCdjUXw',
-    'iLnmTe5Q2Qw',
-    '_WoCV4c6XOE',
-    'KmzdUe0RSJo',
-    '6jZDSSZZxjQ',
-    'p2lYr3vM_1w',
-    '7QUtEmBT_-w',
-    '34_PXCzGw1M',
-  ];
+  final List<String> _ids = List.generate(musics.length, (index) => musics[index]['youtubeid']);
 
   @override
   void initState() {
@@ -117,6 +110,10 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
+  void adjustSpeed(){
+    _controller.setPlaybackRate(_playbackBPM/musics[_ids.indexOf(_controller.metadata.videoId) ]['BPM']);
+  }
+
   @override
   Widget build(BuildContext context) {
     return YoutubePlayerBuilder(
@@ -148,7 +145,7 @@ class _MyHomePageState extends State<MyHomePage> {
               size: 25.0,
             ),
             onPressed: () {
-              log('Settings Tapped!');
+              dev.log('Settings Tapped!');
             },
           ),
         ],
@@ -159,6 +156,7 @@ class _MyHomePageState extends State<MyHomePage> {
           _controller
               .load(_ids[(_ids.indexOf(data.videoId) + 1) % _ids.length]);
           _showSnackBar('Next Video Started!');
+          adjustSpeed();
         },
       ),
       builder: (context, player) => Scaffold(
@@ -171,7 +169,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           title: const Text(
-            'Youtube Player Flutter',
+            'Beatim',
             style: TextStyle(color: Colors.white),
           ),
           actions: [
@@ -247,11 +245,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.skip_previous),
-                        onPressed: _isPlayerReady
-                            ? () => _controller.load(_ids[
+                        onPressed:_isPlayerReady
+                            ? () { _controller.load(_ids[
                         (_ids.indexOf(_controller.metadata.videoId) -
                             1) %
-                            _ids.length])
+                            _ids.length]);
+                        adjustSpeed();}
                             : null,
                       ),
                       IconButton(
@@ -289,10 +288,11 @@ class _MyHomePageState extends State<MyHomePage> {
                       IconButton(
                         icon: const Icon(Icons.skip_next),
                         onPressed: _isPlayerReady
-                            ? () => _controller.load(_ids[
+                            ? () {_controller.load(_ids[
                         (_ids.indexOf(_controller.metadata.videoId) +
                             1) %
-                            _ids.length])
+                            _ids.length]);
+                        adjustSpeed();}
                             : null,
                       ),
                     ],
@@ -322,6 +322,55 @@ class _MyHomePageState extends State<MyHomePage> {
                               : null,
                         ),
                       ),
+                    ],
+                  ),
+                  Row(
+                    children: <Widget>[
+                      const Text(
+                        "playbackBPM",
+                        style: TextStyle(fontWeight: FontWeight.w300),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          inactiveColor: Colors.transparent,
+                          value: _playbackBPM,
+                          min: math.min (50.0,_playbackBPM),
+                          max: math.max (200.0, _playbackBPM),
+                          label: '${(_playbackBPM).round()}',
+                          onChanged: _isPlayerReady
+                              ? (value) {
+                            setState(() {
+                              _playbackBPM = value;
+                            });
+                            adjustSpeed();
+                          }
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: <Widget>[
+                      IconButton(
+                          onPressed:(){
+                            setState(() {
+                              _playbackBPM ++ ;
+                              adjustSpeed();
+                            });
+                          },
+                          icon: Icon(Icons.add),
+                      ),
+                      Text("${_playbackBPM.round()}"),
+                      IconButton(
+                          onPressed:(){
+                            setState(() {
+                              _playbackBPM --;
+                              adjustSpeed();
+                            });
+                          },
+                          icon: Icon(Icons.remove),
+                      ),
+                      Text("${_ids.indexOf(_controller.metadata.videoId)}"),
                     ],
                   ),
                   _space,
