@@ -1,11 +1,16 @@
-import 'dart:developer';
+import 'dart:developer' as dev;
+import 'dart:math' as math;
 
+import 'package:beatim3/musicselectfunction.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'video_list.dart';
+import 'musicdata.dart';
+
+List<int> _playlist = [0,1,2,3,4,5,6,7,8,9,10];
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +28,7 @@ class YoutubePlayerDemoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Youtube Player Flutter',
+      title: 'Beatim',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         appBarTheme: const AppBarTheme(
@@ -57,20 +62,15 @@ class _MyHomePageState extends State<MyHomePage> {
   late PlayerState _playerState;
   late YoutubeMetaData _videoMetaData;
   double _volume = 100;
+  double _playbackBPM = 160.0;
   bool _muted = false;
   bool _isPlayerReady = false;
 
-  final List<String> _ids = [
-    'nPt8bK2gbaU',
-    'gQDByCdjUXw',
-    'iLnmTe5Q2Qw',
-    '_WoCV4c6XOE',
-    'KmzdUe0RSJo',
-    '6jZDSSZZxjQ',
-    'p2lYr3vM_1w',
-    '7QUtEmBT_-w',
-    '34_PXCzGw1M',
-  ];
+  String _genre = "free";
+  String _artist = "free";
+
+
+  List<String> _ids = List.generate(_playlist.length, (index) => musics[_playlist[index]]['youtubeid']);
 
   @override
   void initState() {
@@ -98,6 +98,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _playerState = _controller.value.playerState;
         _videoMetaData = _controller.metadata;
+        adjustSpeed();
       });
     }
   }
@@ -115,6 +116,19 @@ class _MyHomePageState extends State<MyHomePage> {
     _idController.dispose();
     _seekToController.dispose();
     super.dispose();
+  }
+
+  void adjustSpeed(){
+      _controller.setPlaybackRate(_playbackBPM/musics[_playlist[_ids.indexOf(_videoMetaData.videoId) > 0 ? _ids.indexOf(_videoMetaData.videoId) :0]]['BPM']);
+      debugPrint("speed adjusted");
+  }
+
+  void remakePlayList(genre, artist, BPM){
+    _playlist = musicselect(genre: genre, artist: artist, BPM: BPM);
+    _ids = List.generate(_playlist.length, (index) => musics[_playlist[index]]['youtubeid']);
+    _controller.load(_ids[0]);
+    _controller.play();
+    debugPrint("remake playlist");
   }
 
   @override
@@ -148,7 +162,7 @@ class _MyHomePageState extends State<MyHomePage> {
               size: 25.0,
             ),
             onPressed: () {
-              log('Settings Tapped!');
+              dev.log('Settings Tapped!');
             },
           ),
         ],
@@ -159,6 +173,7 @@ class _MyHomePageState extends State<MyHomePage> {
           _controller
               .load(_ids[(_ids.indexOf(data.videoId) + 1) % _ids.length]);
           _showSnackBar('Next Video Started!');
+          adjustSpeed();
         },
       ),
       builder: (context, player) => Scaffold(
@@ -171,7 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           title: const Text(
-            'Youtube Player Flutter',
+            'Beatim',
             style: TextStyle(color: Colors.white),
           ),
           actions: [
@@ -247,11 +262,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.skip_previous),
-                        onPressed: _isPlayerReady
-                            ? () => _controller.load(_ids[
+                        onPressed:_isPlayerReady
+                            ? () { _controller.load(_ids[
                         (_ids.indexOf(_controller.metadata.videoId) -
                             1) %
-                            _ids.length])
+                            _ids.length]);
+                        adjustSpeed();}
                             : null,
                       ),
                       IconButton(
@@ -289,10 +305,11 @@ class _MyHomePageState extends State<MyHomePage> {
                       IconButton(
                         icon: const Icon(Icons.skip_next),
                         onPressed: _isPlayerReady
-                            ? () => _controller.load(_ids[
+                            ? () {_controller.load(_ids[
                         (_ids.indexOf(_controller.metadata.videoId) +
                             1) %
-                            _ids.length])
+                            _ids.length]);
+                        adjustSpeed();}
                             : null,
                       ),
                     ],
@@ -322,6 +339,55 @@ class _MyHomePageState extends State<MyHomePage> {
                               : null,
                         ),
                       ),
+                    ],
+                  ),
+                  Row(
+                    children: <Widget>[
+                      const Text(
+                        "playbackBPM",
+                        style: TextStyle(fontWeight: FontWeight.w300),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          inactiveColor: Colors.transparent,
+                          value: _playbackBPM,
+                          min: math.min (50.0,_playbackBPM),
+                          max: math.max (200.0, _playbackBPM),
+                          label: '${(_playbackBPM).round()}',
+                          onChanged: _isPlayerReady
+                              ? (value) {
+                            setState(() {
+                              _playbackBPM = value;
+                              remakePlayList(_genre, _artist, _playbackBPM);
+                            });
+                          }
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: <Widget>[
+                      IconButton(
+                        onPressed: _isPlayerReady ? (){
+                            setState(() {
+                              _playbackBPM --;
+                            });
+                        }
+                          :null,
+                          icon: const Icon(Icons.remove),
+                      ),
+                      Text("${_playbackBPM.round()}"),
+                      IconButton(
+                        onPressed: _isPlayerReady ? (){
+                          setState(() {
+                            _playbackBPM ++;
+                          });
+                        }
+                            :null,
+                          icon: const Icon(Icons.add),
+                      ),
+                      Text("${_ids.indexOf(_controller.metadata.videoId)}"),
                     ],
                   ),
                   _space,
