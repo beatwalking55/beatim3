@@ -1,6 +1,7 @@
 import 'dart:developer' as dev;
 import 'dart:math' as math;
 
+import 'package:beatim3/musicselectfunction.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,8 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import 'video_list.dart';
 import 'musicdata.dart';
+
+List<int> _playlist = [0,1,2,3,4,5,6,7,8,9,10];
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,7 +66,11 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _muted = false;
   bool _isPlayerReady = false;
 
-  final List<String> _ids = List.generate(musics.length, (index) => musics[index]['youtubeid']);
+  String _genre = "free";
+  String _artist = "free";
+
+
+  List<String> _ids = List.generate(_playlist.length, (index) => musics[_playlist[index]]['youtubeid']);
 
   @override
   void initState() {
@@ -91,6 +98,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _playerState = _controller.value.playerState;
         _videoMetaData = _controller.metadata;
+        adjustSpeed();
       });
     }
   }
@@ -111,7 +119,16 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void adjustSpeed(){
-    _controller.setPlaybackRate(_playbackBPM/musics[_ids.indexOf(_controller.metadata.videoId) ]['BPM']);
+      _controller.setPlaybackRate(_playbackBPM/musics[_playlist[_ids.indexOf(_videoMetaData.videoId) > 0 ? _ids.indexOf(_videoMetaData.videoId) :0]]['BPM']);
+      debugPrint("speed adjusted");
+  }
+
+  void remakePlayList(genre, artist, BPM){
+    _playlist = musicselect(genre: genre, artist: artist, BPM: BPM);
+    _ids = List.generate(_playlist.length, (index) => musics[_playlist[index]]['youtubeid']);
+    _controller.load(_ids[0]);
+    _controller.play();
+    debugPrint("remake playlist");
   }
 
   @override
@@ -341,8 +358,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               ? (value) {
                             setState(() {
                               _playbackBPM = value;
+                              remakePlayList(_genre, _artist, _playbackBPM);
                             });
-                            adjustSpeed();
                           }
                               : null,
                         ),
@@ -352,23 +369,23 @@ class _MyHomePageState extends State<MyHomePage> {
                   Row(
                     children: <Widget>[
                       IconButton(
-                          onPressed:(){
+                        onPressed: _isPlayerReady ? (){
                             setState(() {
-                              _playbackBPM ++ ;
-                              adjustSpeed();
+                              _playbackBPM --;
                             });
-                          },
-                          icon: Icon(Icons.add),
+                        }
+                          :null,
+                          icon: const Icon(Icons.remove),
                       ),
                       Text("${_playbackBPM.round()}"),
                       IconButton(
-                          onPressed:(){
-                            setState(() {
-                              _playbackBPM --;
-                              adjustSpeed();
-                            });
-                          },
-                          icon: Icon(Icons.remove),
+                        onPressed: _isPlayerReady ? (){
+                          setState(() {
+                            _playbackBPM ++;
+                          });
+                        }
+                            :null,
+                          icon: const Icon(Icons.add),
                       ),
                       Text("${_ids.indexOf(_controller.metadata.videoId)}"),
                     ],
