@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-import 'video_list.dart';
 import 'musicdata.dart';
 
 List<int> _playlist = [0,1,2,3,4,5,6,7,8,9,10];
@@ -16,7 +15,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.blueAccent,
+      statusBarColor: Colors.black,
     ),
   );
   runApp(YoutubePlayerDemoApp());
@@ -30,9 +29,9 @@ class YoutubePlayerDemoApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Beatim',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.purple,
         appBarTheme: const AppBarTheme(
-          color: Colors.blueAccent,
+          color: Colors.black,
           titleTextStyle: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w300,
@@ -40,7 +39,7 @@ class YoutubePlayerDemoApp extends StatelessWidget {
           ),
         ),
         iconTheme: const IconThemeData(
-          color: Colors.blueAccent,
+          color: Colors.white,
         ),
       ),
       home: MyHomePage(),
@@ -65,6 +64,10 @@ class _MyHomePageState extends State<MyHomePage> {
   double _playbackBPM = 160.0;
   bool _muted = false;
   bool _isPlayerReady = false;
+  int _oldtime = 0;
+  int _newtime = 0;
+  List<int> _intervals = [1, 1, 1, 1, 1, 1, 1];
+  int _counter = 0;
 
   String _genre = "free";
   String _artist = "free";
@@ -120,7 +123,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void adjustSpeed(){
       _controller.setPlaybackRate(_playbackBPM/musics[_playlist[_ids.indexOf(_videoMetaData.videoId) > 0 ? _ids.indexOf(_videoMetaData.videoId) :0]]['BPM']);
-      debugPrint("speed adjusted");
   }
 
   void remakePlayList(genre, artist, BPM){
@@ -129,6 +131,14 @@ class _MyHomePageState extends State<MyHomePage> {
     _controller.load(_ids[0]);
     _controller.play();
     debugPrint("remake playlist");
+  }
+
+  void calcBPMFromIntervals(){
+    double aveDul = (_intervals.reduce((a, b) => a + b) -
+        _intervals.reduce(math.max) -
+        _intervals.reduce(math.min)) /
+        (_intervals.length - 2);
+    _playbackBPM = 60.0 / (aveDul / 1000);
   }
 
   @override
@@ -141,7 +151,7 @@ class _MyHomePageState extends State<MyHomePage> {
       player: YoutubePlayer(
         controller: _controller,
         showVideoProgressIndicator: true,
-        progressIndicatorColor: Colors.blueAccent,
+        progressIndicatorColor: Colors.white,
         topActions: <Widget>[
           const SizedBox(width: 8.0),
           Expanded(
@@ -181,7 +191,7 @@ class _MyHomePageState extends State<MyHomePage> {
           leading: Padding(
             padding: const EdgeInsets.only(left: 12.0),
             child: Image.asset(
-              'assets/beatim.png',
+              'assets/beatimlogo.png',
               fit: BoxFit.fitWidth,
             ),
           ),
@@ -189,20 +199,11 @@ class _MyHomePageState extends State<MyHomePage> {
             'Beatim',
             style: TextStyle(color: Colors.white),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.video_library),
-              onPressed: () => Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (context) => VideoList(),
-                ),
-              ),
-            ),
-          ],
         ),
-        body: ListView(
-          children: [
+        body: Container(
+          color: Colors.black,
+          child: Column(
+          children:[
             player,
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -211,10 +212,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 children: [
                   _space,
                   _text('Title', _videoMetaData.title),
-                  _space,
-                  _text('Channel', _videoMetaData.author),
-                  _space,
-                  _text('Video Id', _videoMetaData.videoId),
                   _space,
                   Row(
                     children: [
@@ -230,36 +227,22 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   _space,
-                  TextField(
-                    enabled: _isPlayerReady,
-                    controller: _idController,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Enter youtube \<video id\> or \<link\>',
-                      fillColor: Colors.blueAccent.withAlpha(20),
-                      filled: true,
-                      hintStyle: const TextStyle(
-                        fontWeight: FontWeight.w300,
-                        color: Colors.blueAccent,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => _idController.clear(),
-                      ),
-                    ),
-                  ),
-                  _space,
-                  Row(
-                    children: [
-                      _loadCueButton('LOAD'),
-                      const SizedBox(width: 10.0),
-                      _loadCueButton('CUE'),
-                    ],
-                  ),
-                  _space,
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
+                      IconButton(
+                        icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                        onPressed: _isPlayerReady
+                            ? () {
+                          _muted
+                              ? _controller.unMute()
+                              : _controller.mute();
+                          setState(() {
+                            _muted = !_muted;
+                          });
+                        }
+                            : null,
+                      ),
                       IconButton(
                         icon: const Icon(Icons.skip_previous),
                         onPressed:_isPlayerReady
@@ -286,23 +269,6 @@ class _MyHomePageState extends State<MyHomePage> {
                             : null,
                       ),
                       IconButton(
-                        icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-                        onPressed: _isPlayerReady
-                            ? () {
-                          _muted
-                              ? _controller.unMute()
-                              : _controller.mute();
-                          setState(() {
-                            _muted = !_muted;
-                          });
-                        }
-                            : null,
-                      ),
-                      FullScreenButton(
-                        controller: _controller,
-                        color: Colors.blueAccent,
-                      ),
-                      IconButton(
                         icon: const Icon(Icons.skip_next),
                         onPressed: _isPlayerReady
                             ? () {_controller.load(_ids[
@@ -312,40 +278,28 @@ class _MyHomePageState extends State<MyHomePage> {
                         adjustSpeed();}
                             : null,
                       ),
+                      FullScreenButton(
+                        controller: _controller,
+                        color: Colors.white,
+                      ),
                     ],
                   ),
                   _space,
                   Row(
                     children: <Widget>[
                       const Text(
-                        "Volume",
-                        style: TextStyle(fontWeight: FontWeight.w300),
+                        "playbackBPM : ",
+                        style: TextStyle(fontWeight: FontWeight.w300,color: Colors.white),
                       ),
-                      Expanded(
-                        child: Slider(
-                          inactiveColor: Colors.transparent,
-                          value: _volume,
-                          min: 0.0,
-                          max: 100.0,
-                          divisions: 10,
-                          label: '${(_volume).round()}',
-                          onChanged: _isPlayerReady
-                              ? (value) {
-                            setState(() {
-                              _volume = value;
-                            });
-                            _controller.setVolume(_volume.round());
-                          }
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: <Widget>[
-                      const Text(
-                        "playbackBPM",
-                        style: TextStyle(fontWeight: FontWeight.w300),
+                      Text("${_playbackBPM.round()}", style: TextStyle(color: Colors.white),),
+                      IconButton(
+                        onPressed: _isPlayerReady ? (){
+                          setState(() {
+                            _playbackBPM --;
+                          });
+                        }
+                            :null,
+                        icon: const Icon(Icons.remove),
                       ),
                       Expanded(
                         child: Slider(
@@ -364,20 +318,6 @@ class _MyHomePageState extends State<MyHomePage> {
                               : null,
                         ),
                       ),
-                    ],
-                  ),
-                  Row(
-                    children: <Widget>[
-                      IconButton(
-                        onPressed: _isPlayerReady ? (){
-                            setState(() {
-                              _playbackBPM --;
-                            });
-                        }
-                          :null,
-                          icon: const Icon(Icons.remove),
-                      ),
-                      Text("${_playbackBPM.round()}"),
                       IconButton(
                         onPressed: _isPlayerReady ? (){
                           setState(() {
@@ -385,34 +325,130 @@ class _MyHomePageState extends State<MyHomePage> {
                           });
                         }
                             :null,
-                          icon: const Icon(Icons.add),
+                        icon: const Icon(Icons.add),
                       ),
-                      Text("${_ids.indexOf(_controller.metadata.videoId)}"),
                     ],
                   ),
-                  _space,
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 800),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20.0),
-                      color: _getStateColor(_playerState),
-                    ),
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      _playerState.toString(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w300,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10,50,10,10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        SizedBox(
+                          width: 70,
+                          height: 60,
+                        ),
+                        Container(
+                          //外側の四角
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20), //角丸にする
+                            gradient: const LinearGradient(
+                              //グラデーション設定
+                                begin: FractionalOffset.topLeft, //グラデーション開始位置
+                                end: FractionalOffset.bottomRight, //グラデーション終了位置
+                                colors: [
+                                  Colors.pinkAccent, //グラデーション開始色
+                                  Colors.purple, //グラデーション終了色
+                                ]),
+                          ),
+                          width: 200, //幅
+                          height: 200, //高さ
+                          child: Center(
+                            //内側の四角
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(5), //角丸にする
+                                color: Colors.black, //色
+                              ),
+                              width: 170, //幅
+                              height: 170, //高さ
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  _oldtime = _newtime;
+                                  _newtime = DateTime.now().millisecondsSinceEpoch; //millisecond
+                                  _intervals[_counter] = _newtime - _oldtime;
+                                  _counter ++;
+                                  if (_counter == _intervals.length) {
+                                    HapticFeedback.vibrate();
+                                    setState(() {
+                                      calcBPMFromIntervals();
+                                      remakePlayList(_genre, _artist, _playbackBPM);
+                                        _counter = 0;
+                                    });
+                                  }
+                                },
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: <Widget>[
+                                    Positioned(
+                                      top: 10.0,
+                                      child: Column(
+                                        //ボタンの中身
+                                        children: [
+                                          Container(
+                                            width:120,
+                                            height: 120,
+                                            child: Image.asset(
+                                              'assets/beatimlogo.png',
+                                             ),
+                                            ), //走る人のマーク
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                2,2,2,2), //現在のBPM周りの余白
+                                            child: Text(
+                                              "BPM${_playbackBPM.toStringAsFixed(1)}",
+                                              style: const TextStyle(
+                                                  fontSize: 25,
+                                                  color: Colors.white),
+                                            ), //現在のBPM
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 70,
+                          height: 60,
+                        )
+                      ],
                     ),
                   ),
+                  _space,
+                  Center(
+                    child: Container(
+                      child: Text("Tap ${7-_counter} more times !",style: TextStyle(fontSize: 20,color: Colors.white),),
+                    ),
+                  )
+                  // AnimatedContainer(
+                  //   duration: const Duration(milliseconds: 800),
+                  //   decoration: BoxDecoration(
+                  //     borderRadius: BorderRadius.circular(20.0),
+                  //     color: _getStateColor(_playerState),
+                  //   ),
+                  //   padding: const EdgeInsets.all(8.0),
+                  //   child: Text(
+                  //     _playerState.toString(),
+                  //     style: const TextStyle(
+                  //       fontWeight: FontWeight.w300,
+                  //       color: Colors.white,
+                  //     ),
+                  //     textAlign: TextAlign.center,
+                  //   ),
+                  // ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    )
     );
   }
 
@@ -421,14 +457,14 @@ class _MyHomePageState extends State<MyHomePage> {
       text: TextSpan(
         text: '$title : ',
         style: const TextStyle(
-          color: Colors.blueAccent,
+          color: Colors.white,
           fontWeight: FontWeight.bold,
         ),
         children: [
           TextSpan(
             text: value,
             style: const TextStyle(
-              color: Colors.blueAccent,
+              color: Colors.white,
               fontWeight: FontWeight.w300,
             ),
           ),
@@ -460,42 +496,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget get _space => const SizedBox(height: 10);
 
-  Widget _loadCueButton(String action) {
-    return Expanded(
-      child: MaterialButton(
-        color: Colors.blueAccent,
-        onPressed: _isPlayerReady
-            ? () {
-          if (_idController.text.isNotEmpty) {
-            var id = YoutubePlayer.convertUrlToId(
-              _idController.text,
-            ) ??
-                '';
-            if (action == 'LOAD') _controller.load(id);
-            if (action == 'CUE') _controller.cue(id);
-            FocusScope.of(context).requestFocus(FocusNode());
-          } else {
-            _showSnackBar('Source can\'t be empty!');
-          }
-        }
-            : null,
-        disabledColor: Colors.grey,
-        disabledTextColor: Colors.black,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14.0),
-          child: Text(
-            action,
-            style: const TextStyle(
-              fontSize: 18.0,
-              color: Colors.white,
-              fontWeight: FontWeight.w300,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
