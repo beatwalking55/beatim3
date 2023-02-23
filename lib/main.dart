@@ -65,6 +65,11 @@ class _MyHomePageState extends State<MyHomePage> {
   double _playbackBPM = 160.0;
   bool _muted = false;
   bool _isPlayerReady = false;
+  int _oldtime = 0;
+  int _newtime = 0;
+  List<int> _duls = [1, 1, 1, 1, 1, 1, 1];
+  int _counter = 0;
+  double _runnigBPM = 160.0;
 
   String _genre = "free";
   String _artist = "free";
@@ -120,7 +125,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void adjustSpeed(){
       _controller.setPlaybackRate(_playbackBPM/musics[_playlist[_ids.indexOf(_videoMetaData.videoId) > 0 ? _ids.indexOf(_videoMetaData.videoId) :0]]['BPM']);
-      debugPrint("speed adjusted");
   }
 
   void remakePlayList(genre, artist, BPM){
@@ -389,6 +393,96 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       Text("${_ids.indexOf(_controller.metadata.videoId)}"),
                     ],
+                  ),
+                  Container(
+                    //外側の四角
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20), //角丸にする
+                      gradient: const LinearGradient(
+                        //グラデーション設定
+                          begin: FractionalOffset.topLeft, //グラデーション開始位置
+                          end: FractionalOffset.bottomRight, //グラデーション終了位置
+                          colors: [
+                            Colors.pinkAccent, //グラデーション開始色
+                            Colors.purple, //グラデーション終了色
+                          ]),
+                    ),
+                    width: 20, //幅
+                    height: 20, //高さ
+                    child: Center(
+                      //内側の四角
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(1), //角丸にする
+                          color: Colors.black, //色
+                        ),
+                        width: 17, //幅
+                        height: 17, //高さ
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _oldtime = _newtime;
+                            _newtime = DateTime.now()
+                                .millisecondsSinceEpoch; //millisecond
+                            for (int i = _duls.length - 1; i > 0; i--) {
+                              _duls[i] = _duls[i - 1];
+                            }
+                           _duls[0] = _newtime - _oldtime;
+                            double aveDul = (_duls.reduce((a, b) => a + b) -
+                                _duls.reduce(math.max) -
+                                _duls.reduce(math.min)) /
+                                (_duls.length - 2);
+                            setState(() {
+                              _runnigBPM = 60.0 / (aveDul / 1000);
+                            });
+                            _counter ++;
+                            if (_counter == _duls.length + 1) {
+                              HapticFeedback.vibrate();
+                              setState(() {
+                                _playbackBPM = _runnigBPM;
+                                remakePlayList(_genre, _artist, _playbackBPM);
+                                setState(() {
+                                  _counter = 0;
+                                });
+                              });
+                            }
+                          },
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: <Widget>[
+                              Positioned(
+                                top: 1.0,
+                                child: Column(
+                                  //ボタンの中身
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(
+                                          1.0), //走る人マーク周りの余白
+                                      child: Icon(
+                                        Icons.directions_run,
+                                        color: Colors.white,
+                                        size: 10,
+                                      ), //走る人のマーク
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                          0,1,0,0), //現在のBPM周りの余白
+                                      child: Text(
+                                        "runningBPM${_runnigBPM.toStringAsFixed(1)}",
+                                        style: const TextStyle(
+                                            fontSize: 2,
+                                            color: Colors.white),
+                                      ), //現在のBPM
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   _space,
                   AnimatedContainer(
