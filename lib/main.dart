@@ -169,6 +169,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void adjustSpeed(){
       _controller.setPlaybackRate(_playbackBPM/musics[_playlist[_ids.indexOf(_videoMetaData.videoId) > 0 ? _ids.indexOf(_videoMetaData.videoId) :0]]['BPM']);
+      debugPrint('${_controller.value.playbackRate}x  ');
   }
 
   void remakePlayList(genre, artist, BPM){
@@ -303,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       IconButton(
                         onPressed: _isPlayerReady ? (){
                           setState(() {
-                            _playbackBPM --;
+                            _playbackBPM = (_playbackBPM - 1).toInt().toDouble();
                           });
                         }
                             :null,
@@ -315,9 +316,11 @@ class _MyHomePageState extends State<MyHomePage> {
                           value: _playbackBPM,
                           min: math.min (50.0,_playbackBPM),
                           max: math.max (200.0, _playbackBPM),
+                          divisions: 150,
                           label: '${(_playbackBPM).round()}',
                           onChanged: _isPlayerReady
                               ? (value) {
+                                HapticFeedback.selectionClick();
                             setState(() {
                               _playbackBPM = value;
                               adjustSpeed();
@@ -332,7 +335,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       IconButton(
                         onPressed: _isPlayerReady ? (){
                           setState(() {
-                            _playbackBPM ++;
+                            _playbackBPM = (_playbackBPM + 1).toInt().toDouble();
                           });
                         }
                             :null,
