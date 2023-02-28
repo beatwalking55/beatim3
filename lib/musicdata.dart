@@ -179,7 +179,7 @@ Map musics = {
     'name': 'Shape of You',
     'youtubeid': 'JGwWNGJdvx8',
     'BPM': 150,
-    'beatability': 0.8,
+    'beatability': 0.5,
     'genre': 'techno',
     'artist': 'Ed Sheeran',
   },

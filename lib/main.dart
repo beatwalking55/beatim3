@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 import 'dart:math' as math;
+import 'package:sensors/sensors.dart';
 
 import 'package:beatim3/musicselectfunction.dart';
 import 'package:flutter/cupertino.dart';
@@ -27,14 +28,15 @@ class YoutubePlayerDemoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Beatim',
+      title: 'BEATIM',
       theme: ThemeData(
-        primarySwatch: Colors.purple,
+        fontFamily: 'Noto Sans',
+        primarySwatch: Colors.deepOrange,
         appBarTheme: const AppBarTheme(
           color: Colors.black,
           titleTextStyle: TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w300,
+            fontWeight: FontWeight.w600,
             fontSize: 20,
           ),
         ),
@@ -60,17 +62,18 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late PlayerState _playerState;
   late YoutubeMetaData _videoMetaData;
-  double _volume = 100;
   double _playbackBPM = 160.0;
-  bool _muted = false;
   bool _isPlayerReady = false;
-  int _oldtime = 0;
-  int _newtime = 0;
-  List<int> _intervals = [1, 1, 1, 1, 1, 1, 1];
-  int _counter = 0;
 
   String _genre = "free";
   String _artist = "free";
+
+  int lapTime = 0, oldLapTime = 0, lapTimeLim = 100, nowTime = 0, oldTime = 0, counter = 0;
+  double dGyroPre = 0, dGyroNow = 0, gain = 0.84, acceleHurdol = 3, bpm = 0;
+  List<double> accele = [0];
+  List<double> acceleFiltered = [0,0];
+  List<int> _intervals = List.filled(15, 0);
+  List<double> gyro = [0,0];
 
 
   List<String> _ids = List.generate(_playlist.length, (index) => musics[_playlist[index]]['youtubeid']);
@@ -82,7 +85,7 @@ class _MyHomePageState extends State<MyHomePage> {
       initialVideoId: _ids.first,
       flags: const YoutubePlayerFlags(
         mute: false,
-        autoPlay: true,
+        autoPlay: false,
         disableDragSeek: false,
         loop: false,
         isLive: false,
@@ -94,6 +97,49 @@ class _MyHomePageState extends State<MyHomePage> {
     _seekToController = TextEditingController();
     _videoMetaData = const YoutubeMetaData();
     _playerState = PlayerState.unknown;
+
+    userAccelerometerEvents.listen((UserAccelerometerEvent event) {
+      setState(() {
+        
+        acceleFiltered[1] = acceleFiltered[0];
+        accele[0] = math.pow((math.pow(event.x,2)+math.pow(event.y,2)),0.5).toDouble();
+
+        //RCローパスフィルタ
+        acceleFiltered[0] = gain*acceleFiltered[1] + (1-gain)*accele[0];
+      });
+    }); //get the sensor data and set then to the data types
+
+    gyroscopeEvents.listen((GyroscopeEvent event) {
+      setState(() {
+        gyro[1] = gyro[0];
+        gyro[0] = event.z;
+
+        oldTime = nowTime;
+        nowTime = DateTime.now().millisecondsSinceEpoch; //ストップウォッチ動かしてからの時間
+
+        //角速度の正負が入れ替わる点（腕の振りの端っこ）を取得
+        if (gyro[0]*gyro[1] < 0  &&
+            acceleFiltered[0]> acceleHurdol &&
+            nowTime > (lapTime + lapTimeLim)) {
+          HapticFeedback.mediumImpact();
+          oldLapTime = lapTime;
+          lapTime = DateTime.now().millisecondsSinceEpoch;
+          _intervals[counter] = lapTime - oldLapTime;
+          counter ++;
+          if (counter == _intervals.length) {
+            setState(() {
+              calcBPMFromIntervals();
+              adjustSpeed();
+              if (_controller.value.playbackRate < 0.9 || _controller.value.playbackRate > 1.30) {
+                remakePlayList(_genre, _artist, _playbackBPM);
+              }
+              counter = 0;
+            });
+          }
+        }
+      });
+      },
+    );
   }
 
   void listener() {
@@ -165,25 +211,19 @@ class _MyHomePageState extends State<MyHomePage> {
               maxLines: 1,
             ),
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.settings,
-              color: Colors.white,
-              size: 25.0,
-            ),
-            onPressed: () {
-              dev.log('Settings Tapped!');
-            },
-          ),
         ],
         onReady: () {
           _isPlayerReady = true;
         },
         onEnded: (data) {
-          _controller
-              .load(_ids[(_ids.indexOf(data.videoId) + 1) % _ids.length]);
-          _showSnackBar('Next Video Started!');
-          adjustSpeed();
+          if (_controller.value.playbackRate < 0.95 || _controller.value.playbackRate > 1.30) {
+            remakePlayList(_genre, _artist, _playbackBPM);
+          }
+          else {
+            _controller.load(_ids[(_ids.indexOf(data.videoId) + 1) % _ids.length]);
+            _showSnackBar('Next Video Started!');
+            adjustSpeed();
+          }
         },
       ),
       builder: (context, player) => Scaffold(
@@ -216,11 +256,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   Row(
                     children: [
                       _text(
-                        'Playback Quality',
-                        _controller.value.playbackQuality ?? '',
-                      ),
-                      const Spacer(),
-                      _text(
                         'Playback Rate',
                         '${_controller.value.playbackRate}x  ',
                       ),
@@ -231,27 +266,11 @@ class _MyHomePageState extends State<MyHomePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       IconButton(
-                        icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-                        onPressed: _isPlayerReady
-                            ? () {
-                          _muted
-                              ? _controller.unMute()
-                              : _controller.mute();
-                          setState(() {
-                            _muted = !_muted;
-                          });
-                        }
-                            : null,
-                      ),
-                      IconButton(
                         icon: const Icon(Icons.skip_previous),
-                        onPressed:_isPlayerReady
-                            ? () { _controller.load(_ids[
-                        (_ids.indexOf(_controller.metadata.videoId) -
-                            1) %
-                            _ids.length]);
-                        adjustSpeed();}
-                            : null,
+                        onPressed:_isPlayerReady ? () { 
+                          _controller.load(_ids[(_ids.indexOf(_controller.metadata.videoId) - 1) % _ids.length]);
+                          adjustSpeed();
+                        } : null,
                       ),
                       IconButton(
                         icon: Icon(
@@ -270,28 +289,17 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.skip_next),
-                        onPressed: _isPlayerReady
-                            ? () {_controller.load(_ids[
-                        (_ids.indexOf(_controller.metadata.videoId) +
-                            1) %
-                            _ids.length]);
-                        adjustSpeed();}
-                            : null,
-                      ),
-                      FullScreenButton(
-                        controller: _controller,
-                        color: Colors.white,
+                        onPressed: _isPlayerReady ? () {
+                          _controller.load(_ids[(_ids.indexOf(_controller.metadata.videoId) + 1) % _ids.length]);
+                          adjustSpeed();
+                        } : null,
                       ),
                     ],
                   ),
                   _space,
                   Row(
                     children: <Widget>[
-                      const Text(
-                        "playbackBPM : ",
-                        style: TextStyle(fontWeight: FontWeight.w300,color: Colors.white),
-                      ),
-                      Text("${_playbackBPM.round()}", style: TextStyle(color: Colors.white),),
+                      _text('BPM','${_playbackBPM.round()}'),
                       IconButton(
                         onPressed: _isPlayerReady ? (){
                           setState(() {
@@ -303,7 +311,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       Expanded(
                         child: Slider(
-                          inactiveColor: Colors.transparent,
+                          inactiveColor: Colors.white10,
                           value: _playbackBPM,
                           min: math.min (50.0,_playbackBPM),
                           max: math.max (200.0, _playbackBPM),
@@ -312,7 +320,10 @@ class _MyHomePageState extends State<MyHomePage> {
                               ? (value) {
                             setState(() {
                               _playbackBPM = value;
-                              remakePlayList(_genre, _artist, _playbackBPM);
+                              adjustSpeed();
+                              if (_controller.value.playbackRate < 0.9 || _controller.value.playbackRate > 1.30) {
+                                remakePlayList(_genre, _artist, _playbackBPM);
+                              }
                             });
                           }
                               : null,
@@ -329,119 +340,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10,50,10,10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        SizedBox(
-                          width: 70,
-                          height: 60,
-                        ),
-                        Container(
-                          //外側の四角
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20), //角丸にする
-                            gradient: const LinearGradient(
-                              //グラデーション設定
-                                begin: FractionalOffset.topLeft, //グラデーション開始位置
-                                end: FractionalOffset.bottomRight, //グラデーション終了位置
-                                colors: [
-                                  Colors.pinkAccent, //グラデーション開始色
-                                  Colors.purple, //グラデーション終了色
-                                ]),
-                          ),
-                          width: 200, //幅
-                          height: 200, //高さ
-                          child: Center(
-                            //内側の四角
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(5), //角丸にする
-                                color: Colors.black, //色
-                              ),
-                              width: 170, //幅
-                              height: 170, //高さ
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  HapticFeedback.lightImpact();
-                                  _oldtime = _newtime;
-                                  _newtime = DateTime.now().millisecondsSinceEpoch; //millisecond
-                                  _intervals[_counter] = _newtime - _oldtime;
-                                  _counter ++;
-                                  if (_counter == _intervals.length) {
-                                    HapticFeedback.vibrate();
-                                    setState(() {
-                                      calcBPMFromIntervals();
-                                      remakePlayList(_genre, _artist, _playbackBPM);
-                                        _counter = 0;
-                                    });
-                                  }
-                                },
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: <Widget>[
-                                    Positioned(
-                                      top: 10.0,
-                                      child: Column(
-                                        //ボタンの中身
-                                        children: [
-                                          Container(
-                                            width:120,
-                                            height: 120,
-                                            child: Image.asset(
-                                              'assets/beatimlogo.png',
-                                             ),
-                                            ), //走る人のマーク
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                2,2,2,2), //現在のBPM周りの余白
-                                            child: Text(
-                                              "BPM${_playbackBPM.toStringAsFixed(1)}",
-                                              style: const TextStyle(
-                                                  fontSize: 25,
-                                                  color: Colors.white),
-                                            ), //現在のBPM
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 70,
-                          height: 60,
-                        )
-                      ],
-                    ),
-                  ),
-                  _space,
-                  Center(
-                    child: Container(
-                      child: Text("Tap ${7-_counter} more times !",style: TextStyle(fontSize: 20,color: Colors.white),),
-                    ),
-                  )
-                  // AnimatedContainer(
-                  //   duration: const Duration(milliseconds: 800),
-                  //   decoration: BoxDecoration(
-                  //     borderRadius: BorderRadius.circular(20.0),
-                  //     color: _getStateColor(_playerState),
-                  //   ),
-                  //   padding: const EdgeInsets.all(8.0),
-                  //   child: Text(
-                  //     _playerState.toString(),
-                  //     style: const TextStyle(
-                  //       fontWeight: FontWeight.w300,
-                  //       color: Colors.white,
-                  //     ),
-                  //     textAlign: TextAlign.center,
-                  //   ),
-                  // ),
                 ],
               ),
             ),
